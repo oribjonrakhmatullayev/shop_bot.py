@@ -5,17 +5,20 @@ from threading import Thread
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, InlineQueryHandler, filters, ContextTypes
 
-# --- RENDER UCHUN SERVER (XATOLIKNI TUZATISH QISMI) ---
+# --- RENDER PORT SOZLAMASI ---
 app = Flask('')
+
 @app.route('/')
-def home(): return "Bot ishlamoqda!"
+def home():
+    return "Bot is alive!"
 
 def run_flask():
-    # Render PORT muhit o'zgaruvchisini avtomatik beradi
+    # Render PORTni avtomatik beradi, agar bermasa 8080 ishlatiladi
     port = int(os.environ.get("PORT", 8080))
+    # '0.0.0.0' orqali Render tashqaridan ulanishi mumkin bo'ladi
     app.run(host='0.0.0.0', port=port)
 
-# --- SOZLAMALAR ---
+# --- BOT SOZLAMALARI ---
 BOT_TOKEN  = "8275086123:AAFM8iifVbe8cidhE07hoEbQ0svwqvRB8ac"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyDTnMjVzYH6utYWodJS2X06ifZTB72HH8o"
 # Yangi jadval: A:Kod, C:Nomi, D:Narxi, E:PV
@@ -119,7 +122,7 @@ async def qidiruv(update, context):
     else: await msg.edit_text("😔 Topilmadi.")
 
 def main():
-    # Flask serverni alohida oqimda ishga tushirish (Render uchun shart)
+    # Render Port binding uchun Flaskni alohida thread'da boshlash (SHART!)
     Thread(target=run_flask).start()
     
     app_tg = Application.builder().token(BOT_TOKEN).build()
@@ -129,6 +132,7 @@ def main():
     app_tg.add_handler(CallbackQueryHandler(page_cb, pattern=r"^page_\d+$"))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
     
+    # Botni ishga tushirish
     app_tg.run_polling()
 
 if __name__ == "__main__":
