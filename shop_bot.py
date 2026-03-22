@@ -11,11 +11,14 @@ app = Flask('')
 def home(): return "Bot ishlamoqda!"
 
 def run_flask():
-    app.run(host='0.0.0.0', port=8080)
+    # Render PORT muhit o'zgaruvchisini avtomatik taqdim etadi
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
 
 # --- SOZLAMALAR ---
 BOT_TOKEN  = "8275086123:AAFM8iifVbe8cidhE07hoEbQ0svwqvRB8ac"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyDTnMjVzYH6utYWodJS2X06ifZTB72HH8o"
+# Yangi jadval: A:Kod, C:Nomi, D:Narxi, E:PV
 SHEET_URL  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5Y5lhFw0cKz8UuVb_fjbv1JKT0ncQYPxihlAycO9cGyZa2E92TKZB3fNx8er9N5EclXKNyzB63Fe7/pub?gid=1315694608&single=true&output=csv"
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -27,16 +30,13 @@ def fetch_products():
         r.raise_for_status()
         rows = list(csv.reader(io.StringIO(r.content.decode("utf-8"))))
         products = []
-        # Yangi jadval: 0:Kod, 2:Nom, 3:Narx, 4:PV
         for i in range(1, len(rows)):
             row = rows[i]
             if not row or len(row) < 5 or not row[0].strip(): continue
-            
             kod = row[0].strip()
-            nom = row[2].strip().split('\n')[0] # Faqat birinchi qator (nomi)
+            nom = row[2].strip().split('\n')[0] # Faqat nomini olish
             narx = row[3].strip().lower().replace(" uzs","").replace(",","").replace(" ","").strip()
             ball = row[4].strip() if row[4].strip() else "0"
-            
             if kod and nom:
                 products.append({"kod": kod, "nom": nom, "narx": narx, "ball": ball})
         return products, None
@@ -119,7 +119,7 @@ async def qidiruv(update, context):
     else: await msg.edit_text("😔 Topilmadi.")
 
 def main():
-    # Render uchun Flaskni alohida thread'da boshlash
+    # Flask serverni alohida oqimda ishga tushirish
     Thread(target=run_flask).start()
     
     app_tg = Application.builder().token(BOT_TOKEN).build()
@@ -129,7 +129,6 @@ def main():
     app_tg.add_handler(CallbackQueryHandler(page_cb, pattern=r"^page_\d+$"))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
     
-    print("Bot Render-da ishga tushdi...")
     app_tg.run_polling()
 
 if __name__ == "__main__":
