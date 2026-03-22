@@ -5,13 +5,13 @@ from threading import Thread
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, InlineQueryHandler, filters, ContextTypes
 
-# --- RENDER UCHUN SERVER ---
+# --- RENDER UCHUN SERVER (XATOLIKNI TUZATISH QISMI) ---
 app = Flask('')
 @app.route('/')
 def home(): return "Bot ishlamoqda!"
 
 def run_flask():
-    # Render PORT muhit o'zgaruvchisini avtomatik taqdim etadi
+    # Render PORT muhit o'zgaruvchisini avtomatik beradi
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
@@ -34,7 +34,7 @@ def fetch_products():
             row = rows[i]
             if not row or len(row) < 5 or not row[0].strip(): continue
             kod = row[0].strip()
-            nom = row[2].strip().split('\n')[0] # Faqat nomini olish
+            nom = row[2].strip().split('\n')[0] 
             narx = row[3].strip().lower().replace(" uzs","").replace(",","").replace(" ","").strip()
             ball = row[4].strip() if row[4].strip() else "0"
             if kod and nom:
@@ -119,7 +119,7 @@ async def qidiruv(update, context):
     else: await msg.edit_text("😔 Topilmadi.")
 
 def main():
-    # Flask serverni alohida oqimda ishga tushirish
+    # Flask serverni alohida oqimda ishga tushirish (Render uchun shart)
     Thread(target=run_flask).start()
     
     app_tg = Application.builder().token(BOT_TOKEN).build()
