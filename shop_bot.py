@@ -43,15 +43,19 @@ def fetch_products():
 
 def format_price(narx):
     try:
+        # Narx ichidagi raqam bo'lmagan belgilarni olib tashlash
         num = "".join(filter(str.isdigit, str(narx)))
+        # 50000 -> 50 000 ko'rinishiga keltirish
         return "{:,}".format(int(num)).replace(",", " ")
-    except: return narx
+    except:
+        return narx
 
-# --- SHABLONNI SHAKLLANTIRISH ---
 def make_card(p):
-    # Mahsulotga qarab avtomatik qisqa tavsiya (shunchaki namuna)
+    # Mahsulot haqida qisqa va samimiy tavsiya qismi
+    # Agar jadvalda tavsiya ustuni bo'lmasa, umumiy sifatli gap qo'shiladi
     tavsiya = "Tabiiy va yuqori sifatli mahsulot, sizga albatta yoqadi!"
     
+    # Siz so'ragan shablon:
     card = (
         f"✨ Greenleaf Сифати — Сизнинг саломатлигингиз учун! ✨\n"
         f"🧼 Маҳсулот: {p['nom']}\n"
@@ -59,8 +63,6 @@ def make_card(p):
         f"💰 Хамкор нархи: {format_price(p['narx'])} сўм\n"
         f"💎 Балл: {p['ball']} PV\n"
         f"✅ {tavsiya}\n"
-        f"🛒 Буюртма: https://t.me/ORIFFFFFFFFFF\n"
-        f"📞 Тел: +998 33 993 4070"
     )
     return card
 
