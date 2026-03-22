@@ -93,10 +93,20 @@ async def send_page(update, context, products, page):
     if update.callback_query: await update.callback_query.edit_message_text(text, parse_mode="Markdown", reply_markup=kb)
     else: await update.message.reply_text(text, parse_mode="Markdown", reply_markup=kb)
 
-async def page_cb(update, context):
-    await update.callback_query.answer()
-    page = int(update.callback_query.data.split("_")[1])
-    products = context.user_data.get("all_products") or fetch_products()[0]
+async def page_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer() # Tugma "aylanib" qolmasligi uchun javob berish shart
+    
+    # callback_data dan sahifa raqamini ajratib olish
+    page = int(query.data.split("_")[1])
+    
+    # Mahsulotlarni qayta yuklash yoki user_data dan olish
+    products = context.user_data.get("all_products")
+    if not products:
+        products, _ = fetch_products()
+        context.user_data["all_products"] = products
+    
+    # Sahifani yangilash
     await send_page(update, context, products, page)
 
 async def yangilash(update, context):
@@ -122,18 +132,21 @@ async def qidiruv(update, context):
     else: await msg.edit_text("😔 Topilmadi.")
 
 def main():
-    # Render Port binding uchun Flaskni alohida thread'da boshlash (SHART!)
-    Thread(target=run_flask).start()
+    app = Application.builder().token(BOT_TOKEN).build()
     
-    app_tg = Application.builder().token(BOT_TOKEN).build()
-    app_tg.add_handler(CommandHandler("start", start))
-    app_tg.add_handler(CommandHandler("barchasi", barchasi))
-    app_tg.add_handler(CommandHandler("yangilash", yangilash))
-    app_tg.add_handler(CallbackQueryHandler(page_cb, pattern=r"^page_\d+$"))
-    app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("barchasi", barchasi))
+    app.add_handler(CommandHandler("yangilash", yangilash))
     
-    # Botni ishga tushirish
-    app_tg.run_polling()
+    # MUHIM: Tugmalar ishlashi uchun mana shu qator bo'lishi shart
+    app.add_handler(CallbackQueryHandler(page_cb, pattern=r"^page_\d+$"))
+    
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
+    
+    # Render uchun Flaskni alohida thread'da ishga tushirish (agar Renderda bo'lsangiz)
+    # Thread(target=run_flask).start()
+    
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
