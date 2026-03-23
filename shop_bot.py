@@ -19,7 +19,7 @@ def run_flask():
     app.run(host='0.0.0.0', port=port)
 
 # --- BOT SOZLAMALARI ---
-BOT_TOKEN  = "8275086123:AAFM8iifVbe8cidhE07hoEbQ0svwqvRB8ac"
+BOT_TOKEN  = "8275086123:AAFa8sY3eUsNBRyKGLA-W47AY1UPyOyrF8U"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyDTnMjVzYH6utYWodJS2X06ifZTB72HH8o"
 # Yangi jadval: A:Kod, C:Nomi, D:Narxi, E:PV
 SHEET_URL  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5Y5lhFw0cKz8UuVb_fjbv1JKT0ncQYPxihlAycO9cGyZa2E92TKZB3fNx8er9N5EclXKNyzB63Fe7/pub?gid=1315694608&single=true&output=csv"
