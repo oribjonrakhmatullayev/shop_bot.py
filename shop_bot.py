@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
-import logging, requests, csv, io, os
+import logging, requests, csv, io, json, os
 from flask import Flask
 from threading import Thread
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- RENDER/PYTHONANYWHERE UCHUN SERVER ---
+# --- RENDER PORT SOZLAMASI ---
 app = Flask('')
+
 @app.route('/')
 def home(): return "Bot ishlamoqda!"
+
+@app.route('/health')
+def health(): return "OK", 200
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
@@ -18,6 +22,8 @@ def run_flask():
 BOT_TOKEN  = "8745146517:AAGu_0Zn-SE7LoT9V-nq1rMAb_lZcJK4n5I"
 ALLOWED_GROUP_ID = 1002307445361
 ALLOWED_THREAD_ID = 1570
+
+# Yangi baza havolasi
 SHEET_URL  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5Y5lhFw0cKz8UuVb_fjbv1JKT0ncQYPxihlAycO9cGyZa2E92TKZB3fNx8er9N5EclXKNyzB63Fe7/pub?gid=1315694608&single=true&output=csv"
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -43,56 +49,63 @@ def fetch_products():
 
 def format_price(narx):
     try:
-        # Narx ichidagi raqam bo'lmagan belgilarni olib tashlash
         num = "".join(filter(str.isdigit, str(narx)))
-        # 50000 -> 50 000 ko'rinishiga keltirish
         return "{:,}".format(int(num)).replace(",", " ")
-    except:
-        return narx
+    except: return narx
 
 def make_card(p):
-    # Mahsulot haqida qisqa va samimiy tavsiya qismi
-    # Agar jadvalda tavsiya ustuni bo'lmasa, umumiy sifatli gap qo'shiladi
-    tavsiya = "Tabiiy va yuqori sifatli mahsulot, sizga albatta yoqadi!"
+    # Mahsulot haqida samimiy tavsiya
+    tavsiya = "Табиий ва юқори сифатли маҳсулот, сизга албатта ёқади!"
     
-    # Siz so'ragan shablon:
+    # SIZ SO'RAGAN ANIQ SHABLON
     card = (
-        f"✨ Greenleaf Сифати — Сизнинг саломатлигингиз учун! ✨\n"
+        f"✨ Greenleaf Сифати — Сизнинг саломатлигингиз учун! ✨\n\n"
         f"🧼 Маҳсулот: {p['nom']}\n"
         f"🆔 Код: {p['kod']}\n"
         f"💰 Хамкор нархи: {format_price(p['narx'])} сўм\n"
-        f"💎 Балл: {p['ball']} PV\n"
-        f"✅ {tavsiya}\n"
+        f"💎 Балл: {p['ball']} PV\n\n"
+        f"✅ {tavsiya}\n\n"
+        f"🛒 Буюртма: https://t.me/ORIFFFFFFFFFF\n"
+        f"📞 Тел: +998 33 993 4070"
     )
     return card
 
 async def qidiruv(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Guruh va Mavzu filtri
+    # Faqat belgilangan guruh va mavzu (topic) uchun
     if update.effective_chat.id != ALLOWED_GROUP_ID: return
-    if update.message.message_thread_id != ALLOWED_THREAD_ID: return
+    
+    # Topic ID ni tekshirish
+    thread_id = update.message.message_thread_id if update.message else None
+    if thread_id != ALLOWED_THREAD_ID: return
 
     query = update.message.text.strip()
     if len(query) < 2: return
     
     products, _ = fetch_products()
+    # Kod yoki nom bo'yicha qidirish
     res = [p for p in products if query.lower() in p["kod"].lower() or query.lower() in p["nom"].lower()]
     
     if res:
-        # Agar bitta mahsulot topilsa, faqat shablonni chiqaradi
         if len(res) == 1:
             await update.message.reply_text(make_card(res[0]))
         else:
-            # Agar bir nechta chiqsa, qisqa ro'yxat
             text = f"✅ Шу код бўйича {len(res)} та натижа:\n\n"
             for p in res[:10]:
                 text += f"• {p['nom']} (Код: {p['kod']})\n"
-            text += "\nAniqroq ma'lumot uchun kodni to'liq yozing."
+            text += "\nБатафсил маълумот учун кодni тўлиқ ёзинг."
             await update.message.reply_text(text)
+    # Topilmasa guruhda xalaqit bermaslik uchun bot jim turadi
 
 def main():
+    # Render uchun Flaskni ishga tushirish
     Thread(target=run_flask, daemon=True).start()
+    
+    # Yangi TOKEN bilan ulanish
     app_tg = Application.builder().token(BOT_TOKEN).build()
+    
+    # Faqat matnli xabarlarni qidiruvga yo'naltirish
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
+    
     app_tg.run_polling()
 
 if __name__ == "__main__":
