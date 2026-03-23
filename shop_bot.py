@@ -15,7 +15,7 @@ def run_flask():
     app.run(host='0.0.0.0', port=port)
 
 # --- SOZLAMALAR ---
-BOT_TOKEN  = "8275086123:AAFa8sY3eUsNBRyKGLA-W47AY1UPyOyrF8U"
+BOT_TOKEN  = "8745146517:AAGu_0Zn-SE7LoT9V-nq1rMAb_lZcJK4n5I"
 ALLOWED_GROUP_ID = -1002307445361
 ALLOWED_THREAD_ID = 1570
 SHEET_URL  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5Y5lhFw0cKz8UuVb_fjbv1JKT0ncQYPxihlAycO9cGyZa2E92TKZB3fNx8er9N5EclXKNyzB63Fe7/pub?gid=1315694608&single=true&output=csv"
