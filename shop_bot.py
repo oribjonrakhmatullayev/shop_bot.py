@@ -64,7 +64,7 @@ async def gemini_call(prompt):
 
 async def get_tavsiya(nom):
     res = await gemini_call(f"Mahsulot uchun Ozbekcha qisqa tavsiya (max 10 soz): {nom}")
-    return res or "Sog'liq uchun foydali!"
+    return res or "Siz  uchun foydali!"
 
 def make_card(p, tavsiya=""):
     msg = f"✨ *Greenleaf Sifati*\n\n🧼 *Nom:* {p['nom']}\n🆔 *Kod:* `{p['kod']}`\n💰 *Narx:* {format_price(p['narx'])} so'm\n💎 *Ball:* {p['ball']} PV"
