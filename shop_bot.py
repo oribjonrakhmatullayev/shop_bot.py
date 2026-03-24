@@ -67,7 +67,7 @@ async def get_tavsiya(nom):
     return res or "Siz  uchun foydali!"
 
 def make_card(p, tavsiya=""):
-    msg = f"✨ *Greenleaf Sifati*\n\n🧼 *Nom:* {p['nom']}\n🆔 *Kod:* `{p['kod']}`\n💰 *Narx:* {format_price(p['narx'])} so'm\n💎 *Ball:* {p['ball']} PV"
+    msg = f"✨ *Greenleaf Sifatini his qiling*\n\n🧼 *Nom:* {p['nom']}\n🆔 *Kod:* `{p['kod']}`\n💰 *Narx:* {format_price(p['narx'])} so'm\n💎 *Ball:* {p['ball']} PV"
     if tavsiya: msg += f"\n✅ _{tavsiya}_"
     return msg
 
