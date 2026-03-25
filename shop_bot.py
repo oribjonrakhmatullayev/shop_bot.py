@@ -8,7 +8,7 @@ from flask import Flask
 from threading import Thread
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-import google.generativeai as genai  # <-- GEMINI QO'SHILDI
+import google.generativeai as genai
 
 # --- RENDER PORT SOZLAMASI ---
 app = Flask(__name__)
@@ -95,10 +95,21 @@ async def qidiruv(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for p in products:
         catalog_text += f"Kod: {p['kod']} | Nom: {p['nom']} | Narx: {format_price(p['narx'])} so'm | Ball: {p['ball']} PV\n"
 
+    # --- YANGILANGAN VA QAT'IY SHABLON KO'RSATMASI ---
     instruction = f"""
     Siz Greenleaf Rishton markazi mutaxassisiz. 
-    Mijozlar bilan samimiy va xushmuomala gaplashing. 
-    Faqat quyidagi katalog bo'yicha ma'lumot bering va narxlarni chiroyli qilib yozing:
+    Foydalanuvchi so'ragan mahsulotni quyidagi katalogdan toping va AYNAN quyidagi shablon bo'yicha javob bering. Hech qanday ortiqcha so'z, salomlashish yoki o'z fikringizni qo'shmang!
+    
+    Shablon:
+    ✨ Greenleaf Sifati ✨
+
+    🧼 Mahsulot: [Mahsulot nomi]
+    🆔 Kod: [Mahsulot kodi]
+    💰 Narx: [Narxi] so'm
+    💎 Ball: [Ball] PV
+    ✅ [Mahsulotning xususiyatiga mos qisqacha 1 ta ta'rif]. Tavsiya qilaman!
+    
+    Katalog ma'lumotlari:
     {catalog_text}
     """
     
