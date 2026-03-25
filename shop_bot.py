@@ -1,31 +1,27 @@
 # -*- coding: utf-8 -*-
-import logging, requests, csv, io, json, os
+import logging, requests, csv, io, os, re
 from flask import Flask
 from threading import Thread
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-# --- RENDER PORTNI USHLAB TURISH UCHUN KICHIK SERVER ---
+# --- RENDER UCHUN SERVER ---
 app = Flask('')
 
 @app.route('/')
-def home(): return "Bot is alive!"
+def home(): return "Bot ishlamoqda!"
 
 @app.route('/health')
 def health(): return "OK", 200
 
 def run_flask():
-    # Render PORTni avtomatik beradi, agar topilmasa 8080 ishlatiladi
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
 # --- SOZLAMALAR ---
-# Eng oxirgi tokenni kiritganingizga ishonch hosil qiling
 BOT_TOKEN  = "8275086123:AAFa8sY3eUsNBRyKGLA-W47AY1UPyOyrF8U"
 ALLOWED_GROUP_ID = -1002307445361
 ALLOWED_THREAD_ID = 1570
-
-# Yangi CSV baza havolasi
 SHEET_URL  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5Y5lhFw0cKz8UuVb_fjbv1JKT0ncQYPxihlAycO9cGyZa2E92TKZB3fNx8er9N5EclXKNyzB63Fe7/pub?gid=1315694608&single=true&output=csv"
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -41,8 +37,8 @@ def fetch_products():
             row = rows[i]
             if not row or len(row) < 5 or not row[0].strip(): continue
             products.append({
-                "kod": row[0].strip(),
-                "nom": row[2].strip().split('\n')[0], # Faqat birinchi qatordagi nom
+                "kod": row[0].strip().upper(),
+                "nom": row[2].strip().split('\n')[0],
                 "narx": row[3].strip().lower().replace(" uzs","").replace(",","").replace(" ","").strip(),
                 "ball": row[4].strip() if row[4].strip() else "0"
             })
@@ -55,21 +51,18 @@ def format_price(narx):
         return "{:,}".format(int(num)).replace(",", " ")
     except: return narx
 
-# --- SIZ SO'RAGAN ANIQ SHABLON ---
 def make_card(p):
-    tavsiya = "Табиий ва юқори сифатли маҳсулот, сизга албатта ёқади!"
-    
-    card = (
-        f"✨ Greenleaf Сифати — Сизнинг саломатлигингиз uchun! ✨\n"
+    tavsiya = "Табиий ва юқори сифатли маҳсулот, сизга алbatta ёқади!"
+    return (
+        f"✨ Greenleaf Сифати — Сизнинг саломатлигингиз учун! ✨\n\n"
         f"🧼 Маҳсулот: {p['nom']}\n"
         f"🆔 Код: {p['kod']}\n"
-        f"💰 Хамкор нархи: {format_price(p['narx'])} сўm\n"
-        f"💎 Балл: {p['ball']} PV\n"
-        f"✅ {tavsiya}\n"
+        f"💰 Хамкор нархи: {format_price(p['narx'])} сўм\n"
+        f"💎 Балл: {p['ball']} PV\n\n"
+        f"✅ {tavsiya}\n\n"
         f"🛒 Буюртма: https://t.me/ORIFFFFFFFFFF\n"
         f"📞 Тел: +998 33 993 4070"
     )
-    return card
 
 async def qidiruv(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Faqat belgilangan guruh va mavzu (topic) uchun
@@ -78,35 +71,34 @@ async def qidiruv(update: Update, context: ContextTypes.DEFAULT_TYPE):
     thread_id = update.message.message_thread_id if update.message else None
     if thread_id != ALLOWED_THREAD_ID: return
 
-    query = update.message.text.strip()
-    if len(query) < 2: return
-    
+    # Xabarni tozalash (masalan ASF063ASF063 bo'lsa, faqat birinchisini olish)
+    raw_text = update.message.text.strip().upper()
+    # Kod formatini ajratib olish (Harf va raqamlar kombinatsiyasi)
+    match = re.search(r'[A-Z]{2,3}\d{2,4}', raw_text)
+    query = match.group(0) if match else raw_text[:10]
+
     products, _ = fetch_products()
-    res = [p for p in products if query.lower() in p["kod"].lower() or query.lower() in p["nom"].lower()]
+    # Aniq kod bo'yicha qidirish
+    res = [p for p in products if query == p["kod"]]
     
+    # Agar aniq kod topilmasa, qisman qidirish
+    if not res:
+        res = [p for p in products if query in p["kod"] or query.lower() in p["nom"].lower()]
+
     if res:
         if len(res) == 1:
             await update.message.reply_text(make_card(res[0]))
         else:
-            text = f"✅ Шу код бўйича {len(res)} та натижа:\n\n"
+            text = f"✅ Шу сўров бўйича {len(res)} та натижа:\n\n"
             for p in res[:10]:
                 text += f"• {p['nom']} (Код: {p['kod']})\n"
-            text += "\nБатафсил маълумот учун кодни тўлиқ ёзинг."
+            text += "\nAniqroq ma'lumot uchun kodni to'liq yozing."
             await update.message.reply_text(text)
 
 def main():
-    # Render uchun Flaskni alohida oqimda ishga tushirish
     Thread(target=run_flask, daemon=True).start()
-    
     app_tg = Application.builder().token(BOT_TOKEN).build()
-    
-    # Matnli xabarlar uchun qidiruv
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
-    
-    # Buyruqlar (faqat guruhda)
-    app_tg.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("Salom! Mahsulot kodini yozing.") if u.effective_chat.id == ALLOWED_GROUP_ID else None))
-
-    print("Bot Render-da ishga tushdi...")
     app_tg.run_polling()
 
 if __name__ == "__main__":
