@@ -5,14 +5,10 @@ from threading import Thread
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-# --- RENDER UCHUN SERVER ---
+# --- RENDER UCHUN SERVER (Bot uxlab qolmasligi uchun) ---
 app = Flask('')
-
 @app.route('/')
 def home(): return "Bot ishlamoqda!"
-
-@app.route('/health')
-def health(): return "OK", 200
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
@@ -20,13 +16,12 @@ def run_flask():
 
 # --- SOZLAMALAR ---
 BOT_TOKEN  = "8275086123:AAFa8sY3eUsNBRyKGLA-W47AY1UPyOyrF8U"
-ALLOWED_GROUP_ID = -1002307445361
-ALLOWED_THREAD_ID = 1570
 SHEET_URL  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5Y5lhFw0cKz8UuVb_fjbv1JKT0ncQYPxihlAycO9cGyZa2E92TKZB3fNx8er9N5EclXKNyzB63Fe7/pub?gid=1315694608&single=true&output=csv"
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# --- MA'LUMOTLARNI YUKLASH ---
 def fetch_products():
     try:
         r = requests.get(SHEET_URL, timeout=15)
@@ -51,8 +46,9 @@ def format_price(narx):
         return "{:,}".format(int(num)).replace(",", " ")
     except: return narx
 
+# --- SIZ SO'RAGAN ANIQ SHABLON ---
 def make_card(p):
-    tavsiya = "Табиий ва юқори сифатли маҳсулот, сизга алbatta ёқади!"
+    tavsiya = "Табиий ва юқори сифатли маҳсулот, сизга албатта ёқади!"
     return (
         f"✨ Greenleaf Сифати — Сизнинг саломатлигингиз учун! ✨\n\n"
         f"🧼 Маҳсулот: {p['nom']}\n"
@@ -65,23 +61,19 @@ def make_card(p):
     )
 
 async def qidiruv(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Faqat belgilangan guruh va mavzu (topic) uchun
-    if update.effective_chat.id != ALLOWED_GROUP_ID: return
+    # Hech qanday guruh yoki mavzu filtri yo'q - hamma joyda ishlaydi
+    text = update.message.text.strip().upper()
+    if len(text) < 2: return
     
-    thread_id = update.message.message_thread_id if update.message else None
-    if thread_id != ALLOWED_THREAD_ID: return
-
-    # Xabarni tozalash (masalan ASF063ASF063 bo'lsa, faqat birinchisini olish)
-    raw_text = update.message.text.strip().upper()
-    # Kod formatini ajratib olish (Harf va raqamlar kombinatsiyasi)
-    match = re.search(r'[A-Z]{2,3}\d{2,4}', raw_text)
-    query = match.group(0) if match else raw_text[:10]
+    # ASF063ASF063 kabi xatolarni tozalash (faqat birinchi kodni oladi)
+    match = re.search(r'[A-Z]{2,3}\d{2,4}', text)
+    query = match.group(0) if match else text[:10]
 
     products, _ = fetch_products()
-    # Aniq kod bo'yicha qidirish
+    # Kod bo'yicha aniq qidirish
     res = [p for p in products if query == p["kod"]]
     
-    # Agar aniq kod topilmasa, qisman qidirish
+    # Agar aniq kod topilmasa, nomi bo'yicha qisman qidirish
     if not res:
         res = [p for p in products if query in p["kod"] or query.lower() in p["nom"].lower()]
 
@@ -89,16 +81,21 @@ async def qidiruv(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(res) == 1:
             await update.message.reply_text(make_card(res[0]))
         else:
-            text = f"✅ Шу сўров бўйича {len(res)} та натижа:\n\n"
+            resp_text = f"✅ Шу сўров бўйича {len(res)} та натижа:\n\n"
             for p in res[:10]:
-                text += f"• {p['nom']} (Код: {p['kod']})\n"
-            text += "\nAniqroq ma'lumot uchun kodni to'liq yozing."
-            await update.message.reply_text(text)
+                resp_text += f"• {p['nom']} (Код: {p['kod']})\n"
+            resp_text += "\nБатафсил маълумот учун kodni тўлиқ ёзинг."
+            await update.message.reply_text(resp_text)
 
 def main():
+    # Render'da bot o'chib qolmasligi uchun serverni boshlash
     Thread(target=run_flask, daemon=True).start()
+    
     app_tg = Application.builder().token(BOT_TOKEN).build()
+    
+    # Barcha matnli xabarlarni qabul qilish
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
+    
     app_tg.run_polling()
 
 if __name__ == "__main__":
