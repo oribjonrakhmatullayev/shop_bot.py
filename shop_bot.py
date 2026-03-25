@@ -1,152 +1,188 @@
 # -*- coding: utf-8 -*-
-import logging, requests, csv, io, os, re
-from flask import Flask
-from threading import Thread
-from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
-
-# --- RENDER UCHUN SERVER (Bot uxlab qolmasligi uchun) ---
-app = Flask('')
-@app.route('/')
-def home(): return "Bot ishlamoqda!"
-
-def run_flask():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+import logging, requests, csv, io, json
+from telegram import Update, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, InlineQueryHandler, filters, ContextTypes
 
 # --- SOZLAMALAR ---
-BOT_TOKEN  = "8275086123:AAFa8sY3eUsNBRyKGLA-W47AY1UPyOyrF8U"
+BOT_TOKEN  = "8275086123:AAFM8iifVbe8cidhE07hoEbQ0svwqvRB8ac"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyDTnMjVzYH6utYWodJS2X06ifZTB72HH8o"
+
+# Faqat yangi baza (Rasmda ko'rsatilgan struktura)
 SHEET_URL  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5Y5lhFw0cKz8UuVb_fjbv1JKT0ncQYPxihlAycO9cGyZa2E92TKZB3fNx8er9N5EclXKNyzB63Fe7/pub?gid=1315694608&single=true&output=csv"
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- MA'LUMOTLARNI YUKLASH ---
 def fetch_products():
     try:
         r = requests.get(SHEET_URL, timeout=15)
         r.raise_for_status()
         rows = list(csv.reader(io.StringIO(r.content.decode("utf-8"))))
+        
         products = []
-        for i in range(1, len(rows)):
+        # Yangi jadval ustunlari: 0:Kod, 2:Nom, 3:Narx, 4:Ball
+        i = 1 
+        while i < len(rows):
             row = rows[i]
-            if not row or len(row) < 5 or not row[0].strip(): continue
-            products.append({
-                "kod": row[0].strip().upper(),
-                "nom": row[2].strip().split('\n')[0],
-                "narx": row[3].strip().lower().replace(" uzs","").replace(",","").replace(" ","").strip(),
-                "ball": row[4].strip() if row[4].strip() else "0"
-            })
+            if not row or len(row) < 5 or not row[0].strip():
+                i += 1
+                continue
+            
+            kod  = row[0].strip()
+            # Nomdan "Manbada mavjud..." kabi pastki qatorlarni olib tashlash
+            nom  = row[2].strip().split('\n')[0] 
+            # Narxdan "uzs" va bo'shliqlarni olib tashlash
+            narx = row[3].strip().lower().replace(" uzs","").replace(",","").replace(" ","").strip()
+            ball = row[4].strip() if row[4].strip() else "0"
+            
+            if kod and nom:
+                products.append({"kod": kod, "nom": nom, "narx": narx, "ball": ball})
+            i += 1
         return products, None
-    except Exception as e: return [], str(e)
+    except Exception as e:
+        logger.error(f"Baza yuklashda xato: {e}")
+        return [], str(e)
 
 def format_price(narx):
     try:
         num = "".join(filter(str.isdigit, str(narx)))
         return "{:,}".format(int(num)).replace(",", " ")
-    except: return narx
+    except:
+        return narx
 
-# --- SIZ SO'RAGAN ANIQ SHABLON ---
-def make_card(p):
-    tavsiya = "Табиий ва юқори сифатли маҳсулот, сизга албатта ёқади!"
-    return (
-        f"✨ Greenleaf Сифати — Сизнинг саломатлигингиз учун! ✨\n\n"
-        f"🧼 Маҳсулот: {p['nom']}\n"
-        f"🆔 Код: {p['kod']}\n"
-        f"💰 Хамкор нархи: {format_price(p['narx'])} сўм\n"
-        f"💎 Балл: {p['ball']} PV\n\n"
-        f"✅ {tavsiya}\n\n"
-        f"🛒 Буюртма: https://t.me/ORIFFFFFFFFFF\n"
-        f"📞 Тел: +998 33 993 4070"
+def search_products(query, products):
+    q = query.lower().strip()
+    return [p for p in products if q in p["kod"].lower() or q in p["nom"].lower()]
+
+async def gemini_call(prompt):
+    try:
+        resp = requests.post(GEMINI_URL, headers={"Content-Type": "application/json"},
+            json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=15)
+        return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except:
+        return ""
+
+async def get_tavsiya(nom):
+    result = await gemini_call("Mahsulot uchun Ozbek tilida 1 qisqa tavsiya yoz (max 15 soz). Faqat tavsiya: " + nom)
+    return result or "Sog'ligingiz uchun foydali mahsulot!"
+
+async def ai_search(query, products):
+    plist = "\n".join([f"{i+1}. Kod:{p['kod']} Nom:{p['nom']}" for i,p in enumerate(products[:300])])
+    prompt = f'Savol: "{query}"\nJavobni faqat JSON: {{"kodlar":["KOD1"],"tavsiya":"..."}}\nRo\'yxat:\n{plist}'
+    raw = await gemini_call(prompt)
+    try:
+        clean = raw.replace("```json","").replace("```","").strip()
+        return json.loads(clean)
+    except:
+        return {"kodlar": [], "tavsiya": ""}
+
+def make_card(p, tavsiya=""):
+    msg = "✨ *Greenleaf Sifati* ✨\n\n"
+    msg += f"🧼 *Mahsulot:* {p['nom']}\n"
+    msg += f"🆔 *Kod:* `{p['kod']}`\n"
+    msg += f"💰 *Narx:* {format_price(p['narx'])} so'm\n"
+    msg += f"💎 *Ball:* {p['ball']} PV"
+    if tavsiya:
+        msg += f"\n✅ _{tavsiya}_"
+    return msg
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👋 *Assalomu alaykum!*\n\n🔍 Mahsulot kodi yoki nomini yozing.\n📋 /barchasi — hamma mahsulotlar\n🔄 /yangilash — bazani yangilash",
+        parse_mode="Markdown"
     )
+
+async def barchasi(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    products, error = fetch_products()
+    if error:
+        await update.message.reply_text(f"Xato: {error}")
+        return
+    context.user_data["all_products"] = products
+    await send_page(update, context, products, 0)
+
+async def send_page(update, context, products, page):
+    PS = 10
+    si, ei = page*PS, (page+1)*PS
+    text = f"📋 *Barcha mahsulotlar* ({len(products)} ta)\n_{page+1}-sahifa_\n\n"
+    for p in products[si:ei]:
+        text += f"• `{p['kod']}` — {p['nom']} | {format_price(p['narx'])} so'm\n"
+    
+    btns = []
+    if page > 0: btns.append(InlineKeyboardButton("⬅️ Oldingi", callback_data=f"page_{page-1}"))
+    if ei < len(products): btns.append(InlineKeyboardButton("Keyingi ➡️", callback_data=f"page_{page+1}"))
+    
+    kb = InlineKeyboardMarkup([btns]) if btns else None
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode="Markdown", reply_markup=kb)
+    else:
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=kb)
+
+async def page_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    page = int(update.callback_query.data.split("_")[1])
+    products = context.user_data.get("all_products") or fetch_products()[0]
+    await send_page(update, context, products, page)
+
+async def yangilash(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await update.message.reply_text("🔄 Yangilanmoqda...")
+    products, error = fetch_products()
+    if error:
+        await msg.edit_text(f"❌ Xato: {error}")
+    else:
+        await msg.edit_text(f"✅ Yangilandi! Jami: *{len(products)}* ta mahsulot.", parse_mode="Markdown")
 
 async def qidiruv(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Hech qanday guruh yoki mavzu filtri yo'q - hamma joyda ishlaydi
-    text = update.message.text.strip().upper()
-    if len(text) < 2: return
+    query = update.message.text.strip()
+    if len(query) < 2: return
     
-    # ASF063ASF063 kabi xatolarni tozalash (faqat birinchi kodni oladi)
-    match = re.search(r'[A-Z]{2,3}\d{2,4}', text)
-    query = match.group(0) if match else text[:10]
-
+    msg = await update.message.reply_text("🔍 Qidirilmoqda...")
     products, _ = fetch_products()
-    # Kod bo'yicha aniq qidirish
-    res = [p for p in products if query == p["kod"]]
+    results = search_products(query, products)
     
-    # Agar aniq kod topilmasa, nomi bo'yicha qisman qidirish
-    if not res:
-        res = [p for p in products if query in p["kod"] or query.lower() in p["nom"].lower()]
-
-    if res:
-        if len(res) == 1:
-            await update.message.reply_text(make_card(res[0]))
+    if results:
+        if len(results) == 1:
+            tavsiya = await get_tavsiya(results[0]["nom"])
+            await msg.edit_text(make_card(results[0], tavsiya), parse_mode="Markdown")
         else:
-            resp_text = f"✅ Шу сўров бўйича {len(res)} та натижа:\n\n"
-            for p in res[:10]:
-                resp_text += f"• {p['nom']} (Код: {p['kod']})\n"
-            resp_text += "\nБатафсил маълумот учун kodni тўлиқ ёзинг."
-            await update.message.reply_text(resp_text)
-def main() -> None:
-    """
-    Botni ishga tushirish uchun asosiy funksiya.
-    1. Web-serverni (Flask) alohida oqimda boshlaydi.
-    2. Telegram handlerlarni ro'yxatdan o'tkazadi.
-    3. Xatoliklarni nazorat qiladi.
-    """
-    # --- 1. Web-serverni (Render/PythonAnywhere uxlab qolmasligi uchun) boshlash ---
-    try:
-        server_thread = Thread(target=run_flask, daemon=True)
-        server_thread.start()
-        logger.info("✅ Flask web-serveri (Port: 8080) muvaffaqiyatli ishga tushdi.")
-    except Exception as e:
-        logger.error(f"❌ Web-serverni ishga tushirishda xatolik: {e}")
+            text = f"✅ *{len(results)}* ta natija:\n\n"
+            for p in results[:15]:
+                text += f"• `{p['kod']}` — {p['nom']} | {format_price(p['narx'])} so'm\n"
+            await msg.edit_text(text, parse_mode="Markdown")
         return
 
-    # --- 2. Telegram Application obyektini qurish ---
-    try:
-        # ApplicationBuilder orqali botni sozlash
-        builder = Application.builder().token(BOT_TOKEN)
-        
-        # Ulanish vaqtini (timeouts) biroz uzaytirish (Render uchun foydali)
-        builder.connect_timeout(30).read_timeout(30)
-        
-        app_tg = builder.build()
-        logger.info("✅ Telegram Application obyekti yaratildi.")
-    except Exception as e:
-        logger.error(f"❌ Telegram bot tokeni bilan bog'liq xatolik: {e}")
+    await msg.edit_text("🤖 AI qidirmoqda...")
+    ai = await ai_search(query, products)
+    found = [p for p in products if p["kod"] in ai.get("kodlar", [])]
+    
+    if not found:
+        await msg.edit_text(f"😔 *'{query}'* topilmadi.")
         return
+        
+    text = f"💡 *'{query}'* uchun tavsiyalar:\n\n"
+    for p in found[:5]:
+        text += f"📦 *{p['nom']}*\n`{p['kod']}` | {format_price(p['narx'])} so'm\n\n"
+    await msg.edit_text(text, parse_mode="Markdown")
 
-    # --- 3. Handlerlarni (Xabar boshqaruvchilarini) qo'shish ---
-    # Buyruqlar bo'lmagan barcha matnlarni 'qidiruv' funksiyasiga yo'naltirish
-    app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
-    
-    # /start buyrug'i uchun handler
-    async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text("Assalomu alaykum! Mahsulot kodini yozing.")
-    
-    app_tg.add_handler(CommandHandler("start", start_handler))
+async def inline_qidiruv(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.inline_query.query.strip()
+    if len(query) < 2: return
+    products, _ = fetch_products()
+    results = search_products(query, products)[:10]
+    answers = [InlineQueryResultArticle(id=p["kod"], title=p["nom"], 
+               description=f"{format_price(p['narx'])} so'm",
+               input_message_content=InputTextMessageContent(make_card(p), parse_mode="Markdown")) for p in results]
+    await update.inline_query.answer(answers, cache_time=30)
 
-    # --- 4. Botni ishga tushirish (Polling) ---
-    logger.info("🚀 Bot xabarlarni qabul qilish rejimiga o'tdi...")
-    
-    try:
-        # 'drop_pending_updates' — bot o'chiq vaqtida kelgan eski xabarlarni e'tiborsiz qoldiradi
-        app_tg.run_polling(drop_pending_updates=True)
-    except Exception as e:
-        logger.critical(f"💥 Polling jarayonida kutilmagan xato: {e}")
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("barchasi", barchasi))
+    app.add_handler(CommandHandler("yangilash", yangilash))
+    app.add_handler(CallbackQueryHandler(page_cb, pattern=r"^page_\d+$"))
+    app.add_handler(InlineQueryHandler(inline_qidiruv))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
+    print("Bot faqat yangi baza bilan ishga tushdi...")
+    app.run_polling()
 
-# --- DASTURGA KIRISH NUQTASI ---
 if __name__ == "__main__":
-    # Logging darajasini sozlash (faqat INFO va undan yuqori)
-    logging.basicConfig(
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", 
-        level=logging.INFO
-    )
-    
-    try:
-        main()
-    except KeyboardInterrupt:
-        # Ctrl+C bosilganda xavfsiz to'xtash
-        print("\n🛑 Bot foydalanuvchi tomonidan to'xtatildi.")
-    except SystemExit:
-        print("🛑 Tizim botni to'xtatdi.")
+    main()
