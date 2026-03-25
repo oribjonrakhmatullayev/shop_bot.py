@@ -26,7 +26,7 @@ def run_flask():
 BOT_TOKEN = "8275086123:AAFa8sY3eUsNBRyKGLA-W47AY1UPyOyrF8U"
 
 # API kalitni Render'ning Environment Variables bo'limidan oladi
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "AIzaSyD2Jq46UJdttoLwKT5HARisplZ9NlVJ168") 
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 ALLOWED_GROUP_ID = -1002307445361
 ALLOWED_THREAD_ID = 1570
