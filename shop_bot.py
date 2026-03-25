@@ -86,17 +86,67 @@ async def qidiruv(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 resp_text += f"• {p['nom']} (Код: {p['kod']})\n"
             resp_text += "\nБатафсил маълумот учун kodni тўлиқ ёзинг."
             await update.message.reply_text(resp_text)
+def main() -> None:
+    """
+    Botni ishga tushirish uchun asosiy funksiya.
+    1. Web-serverni (Flask) alohida oqimda boshlaydi.
+    2. Telegram handlerlarni ro'yxatdan o'tkazadi.
+    3. Xatoliklarni nazorat qiladi.
+    """
+    # --- 1. Web-serverni (Render/PythonAnywhere uxlab qolmasligi uchun) boshlash ---
+    try:
+        server_thread = Thread(target=run_flask, daemon=True)
+        server_thread.start()
+        logger.info("✅ Flask web-serveri (Port: 8080) muvaffaqiyatli ishga tushdi.")
+    except Exception as e:
+        logger.error(f"❌ Web-serverni ishga tushirishda xatolik: {e}")
+        return
 
-def main():
-    # Render'da bot o'chib qolmasligi uchun serverni boshlash
-    Thread(target=run_flask, daemon=True).start()
-    
-    app_tg = Application.builder().token(BOT_TOKEN).build()
-    
-    # Barcha matnli xabarlarni qabul qilish
+    # --- 2. Telegram Application obyektini qurish ---
+    try:
+        # ApplicationBuilder orqali botni sozlash
+        builder = Application.builder().token(BOT_TOKEN)
+        
+        # Ulanish vaqtini (timeouts) biroz uzaytirish (Render uchun foydali)
+        builder.connect_timeout(30).read_timeout(30)
+        
+        app_tg = builder.build()
+        logger.info("✅ Telegram Application obyekti yaratildi.")
+    except Exception as e:
+        logger.error(f"❌ Telegram bot tokeni bilan bog'liq xatolik: {e}")
+        return
+
+    # --- 3. Handlerlarni (Xabar boshqaruvchilarini) qo'shish ---
+    # Buyruqlar bo'lmagan barcha matnlarni 'qidiruv' funksiyasiga yo'naltirish
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
     
-    app_tg.run_polling()
+    # /start buyrug'i uchun handler
+    async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text("Assalomu alaykum! Mahsulot kodini yozing.")
+    
+    app_tg.add_handler(CommandHandler("start", start_handler))
 
+    # --- 4. Botni ishga tushirish (Polling) ---
+    logger.info("🚀 Bot xabarlarni qabul qilish rejimiga o'tdi...")
+    
+    try:
+        # 'drop_pending_updates' — bot o'chiq vaqtida kelgan eski xabarlarni e'tiborsiz qoldiradi
+        app_tg.run_polling(drop_pending_updates=True)
+    except Exception as e:
+        logger.critical(f"💥 Polling jarayonida kutilmagan xato: {e}")
+
+# --- DASTURGA KIRISH NUQTASI ---
 if __name__ == "__main__":
-    main()
+    # Logging darajasini sozlash (faqat INFO va undan yuqori)
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", 
+        level=logging.INFO
+    )
+    
+    try:
+        main()
+    except KeyboardInterrupt:
+        # Ctrl+C bosilganda xavfsiz to'xtash
+        print("\n🛑 Bot foydalanuvchi tomonidan to'xtatildi.")
+    except SystemExit:
+        print("🛑 Tizim botni to'xtatdi.")
