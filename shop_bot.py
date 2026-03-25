@@ -5,7 +5,7 @@ from threading import Thread
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, InlineQueryHandler, filters, ContextTypes
 
-# Render uchun kichik server (bot o'chib qolmasligi uchun)
+# --- RENDER UCHUN SERVER ---
 app = Flask('')
 @app.route('/')
 def home(): return "Bot ishlamoqda!"
@@ -27,18 +27,18 @@ def fetch_products():
         r.raise_for_status()
         rows = list(csv.reader(io.StringIO(r.content.decode("utf-8"))))
         products = []
-        i = 1 
-        while i < len(rows):
+        # Yangi jadval: 0:Kod, 2:Nom, 3:Narx, 4:PV
+        for i in range(1, len(rows)):
             row = rows[i]
-            if not row or len(row) < 5 or not row[0].strip():
-                i += 1; continue
+            if not row or len(row) < 5 or not row[0].strip(): continue
+            
             kod = row[0].strip()
-            nom = row[2].strip().split('\n')[0] 
+            nom = row[2].strip().split('\n')[0] # Faqat birinchi qator (nomi)
             narx = row[3].strip().lower().replace(" uzs","").replace(",","").replace(" ","").strip()
             ball = row[4].strip() if row[4].strip() else "0"
+            
             if kod and nom:
                 products.append({"kod": kod, "nom": nom, "narx": narx, "ball": ball})
-            i += 1
         return products, None
     except Exception as e:
         return [], str(e)
@@ -60,7 +60,7 @@ async def gemini_call(prompt):
     except: return ""
 
 async def get_tavsiya(nom):
-    res = await gemini_call(f"Mahsulot uchun Ozbekcha 1 qisqa tavsiya (max 10 soz): {nom}")
+    res = await gemini_call(f"Mahsulot uchun Ozbekcha qisqa tavsiya (max 10 soz): {nom}")
     return res or "Sog'liq uchun foydali!"
 
 def make_card(p, tavsiya=""):
@@ -73,7 +73,7 @@ async def start(update, context):
 
 async def barchasi(update, context):
     products, error = fetch_products()
-    if error: await update.message.reply_text(error); return
+    if error: await update.message.reply_text(f"Xato: {error}"); return
     context.user_data["all_products"] = products
     await send_page(update, context, products, 0)
 
@@ -119,7 +119,7 @@ async def qidiruv(update, context):
     else: await msg.edit_text("😔 Topilmadi.")
 
 def main():
-    # Flaskni alohida oqimda ishga tushirish
+    # Render uchun Flaskni alohida thread'da boshlash
     Thread(target=run_flask).start()
     
     app_tg = Application.builder().token(BOT_TOKEN).build()
@@ -128,6 +128,8 @@ def main():
     app_tg.add_handler(CommandHandler("yangilash", yangilash))
     app_tg.add_handler(CallbackQueryHandler(page_cb, pattern=r"^page_\d+$"))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, qidiruv))
+    
+    print("Bot Render-da ishga tushdi...")
     app_tg.run_polling()
 
 if __name__ == "__main__":
